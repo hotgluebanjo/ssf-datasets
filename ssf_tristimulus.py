@@ -35,14 +35,14 @@ def main():
             values = np.array([float(parts[1]), float(parts[2]), float(parts[3])])
             camera[wavelength] = values
 
-    max = np.array([camera[400][0], camera[400][1], camera[400][2]])
+    max_v = np.array([camera[400][0], camera[400][1], camera[400][2]])
     for v in camera.values():
-        if v[0] > max[0]: max[0] = v[0]
-        if v[1] > max[1]: max[1] = v[1]
-        if v[2] > max[2]: max[2] = v[2]
+        if v[0] > max_v[0]: max_v[0] = v[0]
+        if v[1] > max_v[1]: max_v[1] = v[1]
+        if v[2] > max_v[2]: max_v[2] = v[2]
 
     for w in camera.keys():
-        camera[w] /= max
+        camera[w] /= max_v
 
     output = open(SSFS.split('/')[-1], 'w')
     grid = np.linspace(0.0, 1.0, CUBE_SIZE)

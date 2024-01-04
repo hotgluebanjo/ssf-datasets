@@ -35,18 +35,29 @@ def main():
             values = np.array([float(parts[1]), float(parts[2]), float(parts[3])])
             camera[wavelength] = values
 
+    max = np.array([camera[400][0], camera[400][1], camera[400][2]])
+    for v in camera.values():
+        if v[0] > max[0]: max[0] = v[0]
+        if v[1] > max[1]: max[1] = v[1]
+        if v[2] > max[2]: max[2] = v[2]
+
+    for w in camera.keys():
+        camera[w] /= max
+
+    output = open(SSFS.split('/')[-1], 'w')
     grid = np.linspace(0.0, 1.0, CUBE_SIZE)
-    with open(SSFS.split('/')[-1], 'w') as output:
-        for b in grid:
-            for g in grid:
-                for r in grid:
-                    ts = np.zeros((3))
-                    for wavelength in range(400, 700 + 10, 10):
-                        ts += np.sum(wavelength_to_skypanel(wavelength) * np.array([r, g, b])) * camera[wavelength]
-                    for stop in range(-5, 6):
-                        scaled = ts * np.power(2.0, float(stop))
-                        res = logc_encode(scaled)
-                        output.write(f"{res[0]}{DELIMITER}{res[1]}{DELIMITER}{res[2]}\n")
+    for b in grid:
+        for g in grid:
+            for r in grid:
+                ts = np.zeros((3))
+                for wavelength in range(400, 700+10, 10):
+                    stimulus = np.sum(wavelength_to_skypanel(wavelength) * np.array([r, g, b]))
+                    ts += stimulus * camera[wavelength]
+                for stop in range(-5, 5+1):
+                    scaled = (ts * np.power(2.0, stop))
+                    res = logc_encode(scaled)
+                    output.write(f"{res[0]}{DELIMITER}{res[1]}{DELIMITER}{res[2]}\n")
+    output.close()
 
 if __name__ == "__main__":
     main()

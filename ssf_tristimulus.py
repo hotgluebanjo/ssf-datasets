@@ -44,7 +44,7 @@ def main():
     for w in camera.keys():
         camera[w] /= max_v
 
-    output = open(SSFS.split('/')[-1], 'w')
+    output = open(SSFS.split('/')[-1].split('.')[0] + "_out.txt", 'w')
     grid = np.linspace(0.0, 1.0, CUBE_SIZE)
     for b in grid:
         for g in grid:

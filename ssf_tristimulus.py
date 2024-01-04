@@ -3,6 +3,7 @@ import numpy as np
 SSFS = "cameras/arri_alexa.txt"
 CUBE_SIZE = 5
 DELIMITER = ' '
+MAGIC_EXPOSURE_CONSTANT = 6.5
 
 def gaussian(x, center, size):
     return np.exp(-np.power((x - center) / size, 2.0))
@@ -54,7 +55,7 @@ def main():
                     stimulus = np.sum(wavelength_to_skypanel(wavelength) * np.array([r, g, b]))
                     ts += stimulus * camera[wavelength]
                 for stop in range(-5, 5+1):
-                    scaled = (ts * np.power(2.0, stop))
+                    scaled = (ts * np.power(2.0, stop)) # / logc_decode(1.0) * MAGIC_EXPOSURE_CONSTANT
                     res = logc_encode(scaled)
                     output.write(f"{res[0]}{DELIMITER}{res[1]}{DELIMITER}{res[2]}\n")
     output.close()

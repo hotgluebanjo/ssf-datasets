@@ -1,21 +1,23 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-SSFS = "cameras/arri_alexa.txt"
+SSFS = "cameras/sony_ilce_7.txt"
 CUBE_SIZE = 5
 DELIMITER = ' '
-MAGIC_EXPOSURE_CONSTANT = 12.5
 PLOT_POINTS = True
 
 def gaussian(x, center, size):
     return np.exp(-np.power((x - center) / size, 2.0))
 
-def wavelength_to_skypanel(w):
-    # https://www.desmos.com/calculator/gvyahvtfam
-    return np.array([
-        gaussian(w, 628.0, 15.0),
-        gaussian(w, 523.0, 25.0),
-        gaussian(w, 453.0, 15.0)])
+# Relative SPD of approximate RGB SkyPanel. Not RGBW.
+# Really more like the transmission.
+# https://www.desmos.com/calculator/gvyahvtfam
+def arri_skypanel(wavelength, r, g, b):
+    return np.sum([
+        r * gaussian(wavelength, 628.0, 15.0),
+        g * gaussian(wavelength, 523.0, 25.0),
+        b * gaussian(wavelength, 453.0, 15.0),
+    ])
 
 def logc_encode(v):
     return np.where(
@@ -69,14 +71,10 @@ def main():
             values = np.array([float(parts[1]), float(parts[2]), float(parts[3])])
             camera[wavelength] = values
 
-    max_v = np.array([camera[400][0], camera[400][1], camera[400][2]])
-    for v in camera.values():
-        if v[0] > max_v[0]: max_v[0] = v[0]
-        if v[1] > max_v[1]: max_v[1] = v[1]
-        if v[2] > max_v[2]: max_v[2] = v[2]
-
-    for w in camera.keys():
-        camera[w] /= max_v
+    gray_patch = np.zeros((3))
+    for wavelength in range(400, 700+10, 10):
+        gray_patch += camera[wavelength] * 0.18 * arri_skypanel(wavelength, 1.0, 1.0, 1.0)
+    exp_wb_coeff = 0.18 / gray_patch
 
     plot_data = []
 
@@ -87,10 +85,9 @@ def main():
             for r in grid:
                 ts = np.zeros((3))
                 for wavelength in range(400, 700+10, 10):
-                    stimulus = np.sum(wavelength_to_skypanel(wavelength) * np.array([r, g, b]))
-                    ts += stimulus * camera[wavelength]
+                    ts += camera[wavelength] * arri_skypanel(wavelength, r, g, b)
                 for stop in range(-5, 5+1):
-                    scaled = (ts * np.power(2.0, stop)) # / logc_decode(1.0) * MAGIC_EXPOSURE_CONSTANT
+                    scaled = ts * exp_wb_coeff * np.power(2.0, stop)
                     res = logc_encode(scaled)
                     output.write(f"{res[0]}{DELIMITER}{res[1]}{DELIMITER}{res[2]}\n")
                     plot_data.append(res)

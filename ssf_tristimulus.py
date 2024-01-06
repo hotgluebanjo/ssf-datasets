@@ -19,17 +19,12 @@ def arri_skypanel(wavelength, r, g, b):
         b * gaussian(wavelength, 453.0, 15.0),
     ])
 
-def logc_encode(v):
+def logc_encode(x):
     return np.where(
-        v > 0.010591,
-        0.247190 * np.log10(5.555556 * v + 0.052272) + 0.385537,
-        5.367655 * v + 0.092809)
-
-def logc_decode(v):
-    return np.where(
-        v > 0.1496582,
-        (np.power(10.0, (v - 0.385537) / 0.2471896) - 0.052272) / 5.555556,
-        (v - 0.092809) / 5.367655)
+        x > 0.010591,
+        0.247190 * np.log10(5.555556 * x + 0.052272) + 0.385537,
+        5.367655 * x + 0.092809,
+    )
 
 def scatter_plot(data, bg="#222222"):
     fig = plt.figure(figsize=(8, 8))
@@ -72,7 +67,7 @@ def main():
             camera[wavelength] = values
 
     gray_patch = np.zeros((3))
-    for wavelength in range(400, 700+10, 10):
+    for wavelength in range(400, 700+1, 10):
         gray_patch += camera[wavelength] * 0.18 * arri_skypanel(wavelength, 1.0, 1.0, 1.0)
     exp_wb_coeff = 0.18 / gray_patch
 
@@ -84,7 +79,7 @@ def main():
         for g in grid:
             for r in grid:
                 ts = np.zeros((3))
-                for wavelength in range(400, 700+10, 10):
+                for wavelength in range(400, 700+1, 10):
                     ts += camera[wavelength] * arri_skypanel(wavelength, r, g, b)
                 for stop in range(-5, 5+1):
                     scaled = ts * exp_wb_coeff * np.power(2.0, stop)

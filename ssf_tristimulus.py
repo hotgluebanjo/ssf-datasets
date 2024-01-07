@@ -9,8 +9,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 from scipy.interpolate import PchipInterpolator
 
-SSFS = "cameras/sony_ilce_7.txt"
-OUTPUT = "sony_dataset.txt"
+SSFS = "cameras/arri_alexa_brendel_amaraldo.txt"
+OUTPUT = "alexa.txt"
 
 CUBE_SIZE = 5
 SWEEP_MIN = -5.0

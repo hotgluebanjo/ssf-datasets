@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from scipy.interpolate import PchipInterpolator
 
-SSFS = "cameras/arri_alexa_brendel_amaraldo.txt"
+SSFS = "cameras/alexa_MIN400-700.txt"
 OUTPUT = "alexa.txt"
 
 CUBE_SIZE = 5
@@ -62,11 +62,20 @@ def load_ssfs(file):
         value = np.array([float(parts[1]), float(parts[2]), float(parts[3])])
         camera[wavelength] = value
 
-    # PCHIP interpolate for non-one wavelength increments.
     unique_wavelengths = np.array(sorted(camera.keys()))
+
+    if SPECTRUM_MIN < unique_wavelengths[0]:
+        for i in range(SPECTRUM_MIN, int(unique_wavelengths[0])):
+            camera[i] = np.zeros((3))
+
+    if unique_wavelengths[-1] < SPECTRUM_MAX:
+        for i in range(int(unique_wavelengths[-1]) + 1, SPECTRUM_MAX + 1):
+            camera[i] = np.zeros((3))
+
+    # PCHIP interpolate for non-one wavelength increments.
     if np.any(np.diff(unique_wavelengths) > 1):
         pchip = PchipInterpolator(
-            unique_wavelengths,
+            list(camera.keys()),
             np.array(list(camera.values())),
             axis=0,
             extrapolate=False,
@@ -131,11 +140,11 @@ def main():
                     dataset.append(res)
 
     if PLOT:
-        # ssfs = np.array(list(camera.values()))
-        # plt.plot(list(camera.keys()), ssfs[:, 0], c="r")
-        # plt.plot(list(camera.keys()), ssfs[:, 1], c="g")
-        # plt.plot(list(camera.keys()), ssfs[:, 2], c="b")
-        # plt.plot()
+        ssfs = np.array(list(camera.values()))
+        plt.plot(list(camera.keys()), ssfs[:, 0], c="r")
+        plt.plot(list(camera.keys()), ssfs[:, 1], c="g")
+        plt.plot(list(camera.keys()), ssfs[:, 2], c="b")
+        plt.plot()
         scatter_plot(np.array(dataset))
 
     with open(OUTPUT, 'w') as output:

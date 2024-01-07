@@ -1,11 +1,16 @@
-import numpy as np
+"""
+SSF criteria:
+  - Quantum efficiency included
+  - Testing illuminant excluded
+  - Increment <= 10nm for best precision
+"""
+
 import matplotlib.pyplot as plt
+import numpy as np
+from scipy.interpolate import PchipInterpolator
 
 SSFS = "cameras/sony_ilce_7.txt"
-SSFS_DELIMITER = ' '
-
 OUTPUT = "sony_dataset.txt"
-OUTPUT_DELIMITER = ' '
 
 CUBE_SIZE = 5
 SWEEP_MIN = -5.0
@@ -16,7 +21,7 @@ PLOT_POINTS = True
 def gaussian(x, center, size):
     return np.exp(-np.power((x - center) / size, 2.0))
 
-# Relative SPD of approximate RGB SkyPanel. Not RGBW.
+# Relative SPD of approximated SkyPanel. RGB lights only, not RGBW.
 # Really more like the transmission.
 # https://www.desmos.com/calculator/gvyahvtfam
 def arri_skypanel(wavelength, r, g, b):
@@ -32,6 +37,36 @@ def logc_encode(x):
         0.247190 * np.log10(5.555556 * x + 0.052272) + 0.385537,
         5.367655 * x + 0.092809,
     )
+
+def load_ssfs(file):
+    camera = {}
+
+    with open(file, 'r') as file:
+        first_line = file.readline()
+        delimiter = ',' if ',' in first_line else ' '
+
+        try:
+            float(first_line.split(delimiter)[0])
+            file.seek(0)
+            lines = file.readlines()
+        except ValueError:
+            lines = file.readlines()
+
+    for line in lines:
+        parts = line.strip().split(delimiter)
+        wavelength = float(parts[0])
+        value = np.array([float(parts[1]), float(parts[2]), float(parts[3])])
+        camera[wavelength] = value
+
+    # PCHIP if necessary
+    unique_wavelengths = np.array(sorted(camera.keys()))
+    if np.any(np.diff(unique_wavelengths) > 1):
+        pchip = PchipInterpolator(unique_wavelengths, np.array(list(camera.values())), axis=0, extrapolate=True)
+        spectrum = np.arange(380, 780+1, 1)
+        interpolated_values = pchip(spectrum)
+        camera = dict(zip(spectrum, interpolated_values))
+
+    return camera
 
 def scatter_plot(data, bg="#222222"):
     fig = plt.figure(figsize=(8, 8))
@@ -65,43 +100,44 @@ def scatter_plot(data, bg="#222222"):
     plt.show()
 
 def main():
-    camera = {}
-    with open(SSFS, 'r') as file:
-        for line in file:
-            parts = line.split(SSFS_DELIMITER)
-            wavelength = int(parts[0])
-            values = np.array([float(parts[1]), float(parts[2]), float(parts[3])])
-            camera[wavelength] = values
+    camera = load_ssfs(SSFS)
+
+    # TODO: Ignore check or linearly extrapolate.
+    assert list(camera.keys())[0] == 380 and list(camera.keys())[-1] == 780
 
     gray_patch = np.zeros((3))
-    for wavelength in range(400, 700+1, 10):
+    for wavelength in range(380, 780+1):
         gray_patch += camera[wavelength] * 0.18 * arri_skypanel(wavelength, 1.0, 1.0, 1.0)
     exp_wb_coeff = 0.18 / gray_patch
 
-    plot_data = []
-
-    output = open(OUTPUT, 'w')
     grid = np.linspace(0.0, 1.0, CUBE_SIZE)
-
-    steps = int(1 / SWEEP_INCREMENT * (abs(SWEEP_MIN) + SWEEP_MAX)) + 1
-    sweeps = np.linspace(SWEEP_MIN, SWEEP_MAX, steps)
+    sweeps = np.arange(SWEEP_MIN, SWEEP_MAX + SWEEP_INCREMENT, SWEEP_INCREMENT)
+    dataset = []
 
     for b in grid:
         for g in grid:
             for r in grid:
                 ts = np.zeros((3))
-                for wavelength in range(400, 700+1, 10):
+                for wavelength in range(380, 780+1):
                     ts += camera[wavelength] * arri_skypanel(wavelength, r, g, b)
                 for stop in sweeps:
-                    scaled = ts * exp_wb_coeff * np.power(2.0, stop)
-                    res = logc_encode(scaled)
-                    output.write(f"{res[0]}{OUTPUT_DELIMITER}{res[1]}{OUTPUT_DELIMITER}{res[2]}\n")
-                    plot_data.append(res)
-    output.close()
+                    res = logc_encode(ts * exp_wb_coeff * np.power(2.0, stop))
+                    dataset.append(res)
 
     if PLOT_POINTS:
-        plot_data = np.array(plot_data)
-        scatter_plot(plot_data)
+        scatter_plot(np.array(dataset))
+
+    with open(OUTPUT, 'w') as output:
+        match OUTPUT.split('.')[-1]:
+            case "csv":
+                delimiter = ','
+            case "tsv":
+                delimiter = '\t'
+            case _:
+                delimiter = ' '
+
+        for point in dataset:
+            output.write(f"{point[0]}{delimiter}{point[1]}{delimiter}{point[2]}\n")
 
 if __name__ == "__main__":
     main()

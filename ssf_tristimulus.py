@@ -16,7 +16,11 @@ CUBE_SIZE = 5
 SWEEP_MIN = -5.0
 SWEEP_MAX = 5.0
 SWEEP_INCREMENT = 1
-PLOT_POINTS = True
+PLOT = True
+
+# Working spectrum.
+SPECTRUM_MIN = 380
+SPECTRUM_MAX = 780
 
 def gaussian(x, center, size):
     return np.exp(-np.power((x - center) / size, 2.0))
@@ -58,12 +62,17 @@ def load_ssfs(file):
         value = np.array([float(parts[1]), float(parts[2]), float(parts[3])])
         camera[wavelength] = value
 
-    # PCHIP if necessary
+    # PCHIP interpolate for non-one wavelength increments.
     unique_wavelengths = np.array(sorted(camera.keys()))
     if np.any(np.diff(unique_wavelengths) > 1):
-        pchip = PchipInterpolator(unique_wavelengths, np.array(list(camera.values())), axis=0, extrapolate=True)
-        spectrum = np.arange(380, 780+1, 1)
-        interpolated_values = pchip(spectrum)
+        pchip = PchipInterpolator(
+            unique_wavelengths,
+            np.array(list(camera.values())),
+            axis=0,
+            extrapolate=False,
+        )
+        spectrum = np.arange(SPECTRUM_MIN, SPECTRUM_MAX + 1, 1)
+        interpolated_values = np.nan_to_num(pchip(spectrum))
         camera = dict(zip(spectrum, interpolated_values))
 
     return camera
@@ -102,11 +111,8 @@ def scatter_plot(data, bg="#222222"):
 def main():
     camera = load_ssfs(SSFS)
 
-    # TODO: Ignore check or linearly extrapolate.
-    assert list(camera.keys())[0] == 380 and list(camera.keys())[-1] == 780
-
     gray_patch = np.zeros((3))
-    for wavelength in range(380, 780+1):
+    for wavelength in range(SPECTRUM_MIN, SPECTRUM_MAX + 1):
         gray_patch += camera[wavelength] * 0.18 * arri_skypanel(wavelength, 1.0, 1.0, 1.0)
     exp_wb_coeff = 0.18 / gray_patch
 
@@ -118,13 +124,18 @@ def main():
         for g in grid:
             for r in grid:
                 ts = np.zeros((3))
-                for wavelength in range(380, 780+1):
+                for wavelength in range(SPECTRUM_MIN, SPECTRUM_MAX + 1):
                     ts += camera[wavelength] * arri_skypanel(wavelength, r, g, b)
                 for stop in sweeps:
                     res = logc_encode(ts * exp_wb_coeff * np.power(2.0, stop))
                     dataset.append(res)
 
-    if PLOT_POINTS:
+    if PLOT:
+        # ssfs = np.array(list(camera.values()))
+        # plt.plot(list(camera.keys()), ssfs[:, 0], c="r")
+        # plt.plot(list(camera.keys()), ssfs[:, 1], c="g")
+        # plt.plot(list(camera.keys()), ssfs[:, 2], c="b")
+        # plt.plot()
         scatter_plot(np.array(dataset))
 
     with open(OUTPUT, 'w') as output:

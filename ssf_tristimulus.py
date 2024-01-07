@@ -2,8 +2,15 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 SSFS = "cameras/sony_ilce_7.txt"
+SSFS_DELIMITER = ' '
+
+OUTPUT = "sony_dataset.txt"
+OUTPUT_DELIMITER = ' '
+
 CUBE_SIZE = 5
-DELIMITER = ' '
+SWEEP_MIN = -5.0
+SWEEP_MAX = 5.0
+SWEEP_INCREMENT = 1
 PLOT_POINTS = True
 
 def gaussian(x, center, size):
@@ -61,7 +68,7 @@ def main():
     camera = {}
     with open(SSFS, 'r') as file:
         for line in file:
-            parts = line.split(DELIMITER)
+            parts = line.split(SSFS_DELIMITER)
             wavelength = int(parts[0])
             values = np.array([float(parts[1]), float(parts[2]), float(parts[3])])
             camera[wavelength] = values
@@ -73,18 +80,22 @@ def main():
 
     plot_data = []
 
-    output = open(SSFS.split('/')[-1].split('.')[0] + "_out.txt", 'w')
+    output = open(OUTPUT, 'w')
     grid = np.linspace(0.0, 1.0, CUBE_SIZE)
+
+    steps = int(1 / SWEEP_INCREMENT * (abs(SWEEP_MIN) + SWEEP_MAX)) + 1
+    sweeps = np.linspace(SWEEP_MIN, SWEEP_MAX, steps)
+
     for b in grid:
         for g in grid:
             for r in grid:
                 ts = np.zeros((3))
                 for wavelength in range(400, 700+1, 10):
                     ts += camera[wavelength] * arri_skypanel(wavelength, r, g, b)
-                for stop in range(-5, 5+1):
+                for stop in sweeps:
                     scaled = ts * exp_wb_coeff * np.power(2.0, stop)
                     res = logc_encode(scaled)
-                    output.write(f"{res[0]}{DELIMITER}{res[1]}{DELIMITER}{res[2]}\n")
+                    output.write(f"{res[0]}{OUTPUT_DELIMITER}{res[1]}{OUTPUT_DELIMITER}{res[2]}\n")
                     plot_data.append(res)
     output.close()
 

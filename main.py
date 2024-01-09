@@ -43,9 +43,6 @@ def logc_encode(x):
     )
 
 def load_ssfs(file):
-    wavelengths = []
-    values = []
-
     with open(file, 'r') as file:
         first_line = file.readline()
         delimiter = ',' if ',' in first_line else ' '
@@ -56,6 +53,9 @@ def load_ssfs(file):
             lines = file.readlines()
         except ValueError:
             lines = file.readlines()
+
+    wavelengths = []
+    values = []
 
     for line in lines:
         parts = line.strip().split(delimiter)
@@ -74,6 +74,54 @@ def load_ssfs(file):
     camera = dict(zip(spectrum, spectrum_values))
 
     return camera
+
+def process_spectral_data(file):
+    with open(file, 'r') as file:
+        first_line = file.readline()
+        delimiter = ',' if ',' in first_line else ' '
+
+        try:
+            float(first_line.split(delimiter)[0])
+            file.seek(0)
+            lines = file.readlines()
+        except ValueError:
+            lines = file.readlines()
+
+    wavelengths = []
+    values = []
+
+    for line in lines:
+        parts = line.strip().split(delimiter)
+        wavelengths.append(float(parts[0]))
+        values.append([float(val) for val in parts[1:]])
+
+    values = np.array(values).T  # transpose to make the values column-wise
+
+    if wavelengths[0] > 380:
+        # extend and lerp wavelengths to 380nm by 50% of each inital value
+        extended_wl = np.arange(380, wavelengths[0])
+        initial_val = values[:, 0] * 0.5
+        extended_val = [initial_val + (v - initial_val) * (i / (wavelengths[0] - 380))
+                           for i, v in enumerate(np.linspace(initial_val, values[:, 0], len(extended_wl), endpoint=False))]
+        wavelengths = np.concatenate([extended_wl, wavelengths])
+        values = np.concatenate([extended_val, values], axis=1)
+
+    if len(wavelengths) > 1 and all(np.diff(wavelengths) == 1):
+        spectrum = np.array(wavelengths)
+        spectrum_values = values
+    else:
+        pchip = PchipInterpolator(
+            wavelengths,
+            values,
+            axis=1,
+            extrapolate=False,
+        )
+        spectrum = np.arange(380, wavelengths[-1] + 1, 1)
+        spectrum_values = np.nan_to_num(pchip(spectrum), nan=0.0)
+
+    spectral_data = {wavelength: spectrum_values[:, i] for i, wavelength in enumerate(spectrum)}
+
+    return spectral_data
 
 def dataset_from_skypanel_lattice(camera):
     gray_patch = np.zeros((3))

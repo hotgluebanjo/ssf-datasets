@@ -10,7 +10,7 @@ import numpy as np
 from scipy.interpolate import PchipInterpolator
 
 SSFS = "cameras/arri_alexa.txt"
-OUTPUT = "alexa.txt"
+OUTPUT = ""
 
 CUBE_SIZE = 5
 SWEEP_MIN = -5.0
@@ -75,7 +75,28 @@ def load_ssfs(file):
 
     return camera
 
-def scatter_plot(data, bg="#222222"):
+def dataset_from_skypanel_lattice(camera):
+    gray_patch = np.zeros((3))
+    for wavelength in range(SPECTRUM_MIN, SPECTRUM_MAX + 1):
+        gray_patch += camera[wavelength] * 0.18 * arri_skypanel(wavelength, 1.0, 1.0, 1.0)
+    exp_wb_coeff = 0.18 / gray_patch
+
+    grid = np.linspace(0.0, 1.0, CUBE_SIZE)
+    sweeps = np.arange(SWEEP_MIN, SWEEP_MAX + SWEEP_INCREMENT, SWEEP_INCREMENT)
+    dataset = []
+
+    for b in grid:
+        for g in grid:
+            for r in grid:
+                ts = np.zeros((3))
+                for wavelength in range(SPECTRUM_MIN, SPECTRUM_MAX + 1):
+                    ts += camera[wavelength] * arri_skypanel(wavelength, r, g, b)
+                for stop in sweeps:
+                    res = logc_encode(ts * exp_wb_coeff * np.power(2.0, stop))
+                    dataset.append(res)
+    return dataset
+
+def plot_3d(data, bg="#222222"):
     fig = plt.figure(figsize=(8, 8))
     ax = fig.add_subplot(111, projection='3d')
     ax.set_facecolor(bg)
@@ -106,47 +127,36 @@ def scatter_plot(data, bg="#222222"):
     ax.scatter(data[:, 2], data[:, 0], data[:, 1], c=np.clip(data, 0.0, 1.0), marker='o', s=3)
     plt.show()
 
+def plot_ssfs(camera):
+    ssfs = np.array(list(camera.values()))
+    plt.plot(list(camera.keys()), ssfs[:, 0], c="r")
+    plt.plot(list(camera.keys()), ssfs[:, 1], c="g")
+    plt.plot(list(camera.keys()), ssfs[:, 2], c="b")
+    plt.plot()
+
 def main():
     camera = load_ssfs(SSFS)
 
-    gray_patch = np.zeros((3))
-    for wavelength in range(SPECTRUM_MIN, SPECTRUM_MAX + 1):
-        gray_patch += camera[wavelength] * 0.18 * arri_skypanel(wavelength, 1.0, 1.0, 1.0)
-    exp_wb_coeff = 0.18 / gray_patch
-
-    grid = np.linspace(0.0, 1.0, CUBE_SIZE)
-    sweeps = np.arange(SWEEP_MIN, SWEEP_MAX + SWEEP_INCREMENT, SWEEP_INCREMENT)
     dataset = []
 
-    for b in grid:
-        for g in grid:
-            for r in grid:
-                ts = np.zeros((3))
-                for wavelength in range(SPECTRUM_MIN, SPECTRUM_MAX + 1):
-                    ts += camera[wavelength] * arri_skypanel(wavelength, r, g, b)
-                for stop in sweeps:
-                    res = logc_encode(ts * exp_wb_coeff * np.power(2.0, stop))
-                    dataset.append(res)
-
     if PLOT:
-        ssfs = np.array(list(camera.values()))
-        plt.plot(list(camera.keys()), ssfs[:, 0], c="r")
-        plt.plot(list(camera.keys()), ssfs[:, 1], c="g")
-        plt.plot(list(camera.keys()), ssfs[:, 2], c="b")
-        plt.plot()
-        scatter_plot(np.array(dataset))
+        plot_ssfs(camera)
+        plot_3d(np.array(dataset))
 
-    with open(OUTPUT, 'w') as output:
-        match OUTPUT.split('.')[-1]:
-            case "csv":
-                delimiter = ','
-            case "tsv":
-                delimiter = '\t'
-            case _:
-                delimiter = ' '
+    if OUTPUT != "":
+        with open(OUTPUT, 'w') as output:
+            match OUTPUT.split('.')[-1]:
+                case "csv":
+                    delimiter = ','
+                case "tsv":
+                    delimiter = '\t'
+                case _:
+                    delimiter = ' '
 
-        for point in dataset:
-            output.write(f"{point[0]}{delimiter}{point[1]}{delimiter}{point[2]}\n")
+            for point in dataset:
+                output.write(f"{point[0]}{delimiter}{point[1]}{delimiter}{point[2]}\n")
+    else:
+        print(dataset)
 
 if __name__ == "__main__":
     main()

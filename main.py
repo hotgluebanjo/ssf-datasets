@@ -22,19 +22,6 @@ PLOT = True
 SPECTRUM_MIN = 380
 SPECTRUM_MAX = 780
 
-def gaussian(x, center, size):
-    return np.exp(-np.power((x - center) / size, 2.0))
-
-# Relative SPD of approximated SkyPanel. RGB lights only, not RGBW.
-# Really more like the transmission.
-# https://www.desmos.com/calculator/gvyahvtfam
-def arri_skypanel(wavelength, r, g, b):
-    return np.sum([
-        r * gaussian(wavelength, 628.0, 15.0),
-        g * gaussian(wavelength, 523.0, 25.0),
-        b * gaussian(wavelength, 453.0, 15.0),
-    ])
-
 def logc_encode(x):
     return np.where(
         x > 0.010591,
@@ -111,6 +98,19 @@ def process_spectral_data(file_path):
     return spectral_data
 
 def dataset_from_skypanel_lattice(camera):
+    def gaussian(x, center, size):
+        return np.exp(-np.power((x - center) / size, 2.0))
+
+    # Relative SPD of approximated SkyPanel. RGB lights only, not RGBW.
+    # Really more like the transmission.
+    # https://www.desmos.com/calculator/gvyahvtfam
+    def arri_skypanel(wavelength, r, g, b):
+        return np.sum([
+            r * gaussian(wavelength, 628.0, 15.0),
+            g * gaussian(wavelength, 523.0, 25.0),
+            b * gaussian(wavelength, 453.0, 15.0),
+        ])
+    
     gray_patch = np.zeros((3))
     for wavelength in range(SPECTRUM_MIN, SPECTRUM_MAX + 1):
         gray_patch += camera[wavelength] * 0.18 * arri_skypanel(wavelength, 1.0, 1.0, 1.0)

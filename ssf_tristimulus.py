@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from scipy.interpolate import PchipInterpolator
 
-SSFS = "cameras/alexa_MIN400-700.txt"
+SSFS = "cameras/arri_alexa.txt"
 OUTPUT = "alexa.txt"
 
 CUBE_SIZE = 5
@@ -43,7 +43,8 @@ def logc_encode(x):
     )
 
 def load_ssfs(file):
-    camera = {}
+    wavelengths = []
+    values = []
 
     with open(file, 'r') as file:
         first_line = file.readline()
@@ -58,31 +59,19 @@ def load_ssfs(file):
 
     for line in lines:
         parts = line.strip().split(delimiter)
-        wavelength = float(parts[0])
-        value = np.array([float(parts[1]), float(parts[2]), float(parts[3])])
-        camera[wavelength] = value
+        wavelengths.append(float(parts[0]))
+        values.append(np.array([float(parts[1]), float(parts[2]), float(parts[3])]))
 
-    unique_wavelengths = np.array(sorted(camera.keys()))
+    pchip = PchipInterpolator(
+        wavelengths,
+        values,
+        axis=0,
+        extrapolate=False,
+    )
 
-    if SPECTRUM_MIN < unique_wavelengths[0]:
-        for i in range(SPECTRUM_MIN, int(unique_wavelengths[0])):
-            camera[i] = np.zeros((3))
-
-    if unique_wavelengths[-1] < SPECTRUM_MAX:
-        for i in range(int(unique_wavelengths[-1]) + 1, SPECTRUM_MAX + 1):
-            camera[i] = np.zeros((3))
-
-    # PCHIP interpolate for non-one wavelength increments.
-    if np.any(np.diff(unique_wavelengths) > 1):
-        pchip = PchipInterpolator(
-            list(camera.keys()),
-            np.array(list(camera.values())),
-            axis=0,
-            extrapolate=False,
-        )
-        spectrum = np.arange(SPECTRUM_MIN, SPECTRUM_MAX + 1, 1)
-        interpolated_values = np.nan_to_num(pchip(spectrum))
-        camera = dict(zip(spectrum, interpolated_values))
+    spectrum = np.arange(SPECTRUM_MIN, SPECTRUM_MAX + 1, 1)
+    spectrum_values = np.nan_to_num(pchip(spectrum), nan=0.0)
+    camera = dict(zip(spectrum, spectrum_values))
 
     return camera
 

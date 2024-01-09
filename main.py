@@ -10,7 +10,7 @@ import numpy as np
 from scipy.interpolate import PchipInterpolator
 
 SSFS = "cameras/arri_alexa.txt"
-OUTPUT = ""
+OUTPUT = "res.txt"
 
 CUBE_SIZE = 5
 SWEEP_MIN = -5.0
@@ -75,51 +75,38 @@ def load_ssfs(file):
 
     return camera
 
-def process_spectral_data(file):
-    with open(file, 'r') as file:
+def load_spectrum(file):
+    spectrum_data = []
+    with open(file, 'r') as f:
+        for line in f:
+            parts = line.strip().split()
+            spectrum_data.append([float(p) for p in parts])
+    return np.array(spectrum_data)
+
+def process_spectral_data(file_path):
+    with open(file_path, 'r') as file:
         first_line = file.readline()
         delimiter = ',' if ',' in first_line else ' '
+        file.seek(0)
+        data = np.array([line.strip().split(delimiter) for line in file], dtype=float)
 
-        try:
-            float(first_line.split(delimiter)[0])
-            file.seek(0)
-            lines = file.readlines()
-        except ValueError:
-            lines = file.readlines()
-
-    wavelengths = []
-    values = []
-
-    for line in lines:
-        parts = line.strip().split(delimiter)
-        wavelengths.append(float(parts[0]))
-        values.append([float(val) for val in parts[1:]])
-
-    values = np.array(values).T  # transpose to make the values column-wise
+    wavelengths, values = data[:, 0], data[:, 1:].T # transpose to make the values column-wise
 
     if wavelengths[0] > 380:
         # extend and lerp wavelengths to 380nm by 50% of each inital value
         extended_wl = np.arange(380, wavelengths[0])
         initial_val = values[:, 0] * 0.5
-        extended_val = [initial_val + (v - initial_val) * (i / (wavelengths[0] - 380))
-                           for i, v in enumerate(np.linspace(initial_val, values[:, 0], len(extended_wl), endpoint=False))]
+        slope = (values[:, 0] - initial_val) / (wavelengths[0] - 380)
+        extended_val = initial_val[:, np.newaxis] + slope[:, np.newaxis] * (extended_wl - 380)
+
         wavelengths = np.concatenate([extended_wl, wavelengths])
         values = np.concatenate([extended_val, values], axis=1)
 
-    if len(wavelengths) > 1 and all(np.diff(wavelengths) == 1):
-        spectrum = np.array(wavelengths)
-        spectrum_values = values
-    else:
-        pchip = PchipInterpolator(
-            wavelengths,
-            values,
-            axis=1,
-            extrapolate=False,
-        )
-        spectrum = np.arange(380, wavelengths[-1] + 1, 1)
-        spectrum_values = np.nan_to_num(pchip(spectrum), nan=0.0)
+    spectrum = np.arange(380, wavelengths[-1] + 1, 1)
+    interp_val = np.array([np.nan_to_num(PchipInterpolator(wavelengths, v, extrapolate=False)(spectrum), nan=0.0)
+                                    for v in values])
 
-    spectral_data = {wavelength: spectrum_values[:, i] for i, wavelength in enumerate(spectrum)}
+    spectral_data = {i: interp_val[i] for i in range(interp_val.shape[0])}
 
     return spectral_data
 
@@ -183,9 +170,26 @@ def plot_ssfs(camera):
     plt.plot()
 
 def main():
+    illuminant = load_spectrum("illuminants/incandescent_abs.txt")
+    reflectance = process_spectral_data("charts/sg_spectral.txt")
     camera = load_ssfs(SSFS)
+    sweeps = np.arange(SWEEP_MIN, SWEEP_MAX + SWEEP_INCREMENT, SWEEP_INCREMENT)
+    print(reflectance)
+
+    gray_patch = np.zeros((3))
+    for i, wavelength in enumerate(range(SPECTRUM_MIN, SPECTRUM_MAX + 1)):
+        gray_patch += camera[wavelength] * 0.18 * illuminant[i, 1]
+    exp_wb_coeff = 0.18 / gray_patch
 
     dataset = []
+
+    for sds in reflectance:
+        ts = np.zeros((3))
+        for i, wavelength in enumerate(range(SPECTRUM_MIN, SPECTRUM_MAX + 1)):
+            ts += camera[wavelength] * reflectance[sds][i] * illuminant[i, 1]
+        for stop in sweeps:
+            res = logc_encode(ts * exp_wb_coeff * np.power(2.0, stop))
+            dataset.append(res)
 
     if PLOT:
         plot_ssfs(camera)

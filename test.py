@@ -1,4 +1,5 @@
 import colour
+import matplotlib.pyplot as plt
 import numpy as np
 import os
 import scipy
@@ -19,7 +20,12 @@ CAMERA = "cameras/arri_alexa.txt"
 ILLUMINANT = "illuminants/incandescent_abs.txt"
 CHART = "charts/sg_spectral.txt"
 
-OUTPUT = "res.txt"
+OUTPUT = "alexa_dataset_out.txt"
+
+# Will be enum later.
+#   0: Chart
+#   1: SkyPanel
+MODE = 0
 
 SWEEP_MIN = -5.0
 SWEEP_MAX = 5.0
@@ -43,6 +49,9 @@ def into_float(x):
         return (v, True)
     except:
         return (0.0, False)
+
+def make_vec(x, n):
+    return [x] * n
 
 def gaussian(x, center, size):
     return np.exp(-np.power((x - center) / size, 2.0))
@@ -73,6 +82,14 @@ class Sds:
 
         i = wavelength - SPECTRUM_MIN
         return sds.values[i]
+
+    # Separate N distribution columns into an array of Sds.
+    def separate(sds):
+        n_dist = sds.values.shape[1]
+        res = make_vec(Sds, n_dist)
+        for i in range(0, n_dist):
+            res[i] = Sds(sds.wavelengths, sds.values[:, i])
+        return res
 
 # Loads N distributions column-wise. First column is assumed
 # to be wavelengths and N columns after to be individual
@@ -138,6 +155,7 @@ def dataset_from_skypanel_lattice(camera: Sds):
                 for stop in sweeps:
                     res = TRANSFER_FUNCTION(ts * exp_wb_coeff * np.power(2.0, stop))
                     dataset.append(res)
+
     return np.array(dataset)
 
 def dataset_from_chart(camera, chart, illuminant):
@@ -149,10 +167,10 @@ def dataset_from_chart(camera, chart, illuminant):
     sweeps = np.arange(SWEEP_MIN, SWEEP_MAX + SWEEP_INCREMENT, SWEEP_INCREMENT)
     dataset = []
 
-    for sds in chart:
+    for patch in chart:
         ts = np.zeros((3))
         for wavelength in range(SPECTRUM_MIN, SPECTRUM_MAX + 1):
-            ts += camera.sample(wavelength) * chart.sample(wavelength) * illuminant.sample(wavelength)
+            ts += camera.sample(wavelength) * patch.sample(wavelength) * illuminant.sample(wavelength)
         for stop in sweeps:
             res = TRANSFER_FUNCTION(ts * exp_wb_coeff * np.power(2.0, stop))
             dataset.append(res)
@@ -198,11 +216,14 @@ def plot_ssfs(camera):
 
 def main():
     illuminant = sds_from_file(ILLUMINANT)
-    chart = sds_from_file(CHART)
-    camera = sds_from_file(SSFS)
+    chart = sds_from_file(CHART).separate()
+    camera = sds_from_file(CAMERA)
 
-    # Separate chart SDs into vec here.
-    # ...
+    match MODE:
+        case 0:
+            dataset = dataset_from_chart(camera, chart, illuminant)
+        case 1:
+            dataset = dataset_from_skypanel_lattice(camera)
 
     if PLOT:
         plot_ssfs(camera)

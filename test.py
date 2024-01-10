@@ -100,7 +100,7 @@ def sds_from_file(filename, delim=None, comment='#'):
 
     return Sds(data[:, 0], data[:, 1:])
 
-def dataset_from_skypanel_lattice(camera, opts):
+def dataset_from_skypanel_lattice(opts):
     # Relative SPD of approximated SkyPanel. RGB lights only, not RGBW.
     # Really more like the transmission.
     # https://www.desmos.com/calculator/gvyahvtfam
@@ -111,6 +111,8 @@ def dataset_from_skypanel_lattice(camera, opts):
             b * gaussian(wavelength, 453.0, 15.0),
         ])
     
+    camera = sds_from_file(opts.camera)
+
     gray_patch = np.zeros((3))
     for wavelength in range(SPECTRUM_MIN, SPECTRUM_MAX + 1):
         gray_patch += camera.sample(wavelength) * 0.18 * arri_skypanel(wavelength, 1.0, 1.0, 1.0)
@@ -132,7 +134,11 @@ def dataset_from_skypanel_lattice(camera, opts):
 
     return np.array(dataset)
 
-def dataset_from_chart(camera, chart, illuminant, opts):
+def dataset_from_chart(opts):
+    illuminant = sds_from_file(opts.illuminant)
+    chart = sds_from_file(opts.chart).separate()
+    camera = sds_from_file(opts.camera)
+
     gray_patch = np.zeros((3))
     for wavelength in range(SPECTRUM_MIN, SPECTRUM_MAX + 1):
         gray_patch += camera.sample(wavelength) * 0.18 * illuminant.sample(wavelength)
@@ -192,7 +198,7 @@ class Mode:
     CHART = 0
     SKYPANEL = 1
 
-class Opts:
+class Config:
     illuminant = "illuminants/incandescent_abs.txt"
     chart = "charts/sg_spectral.txt"
     camera = "cameras/arri_alexa.txt"
@@ -206,20 +212,16 @@ class Opts:
     plot = True
 
 def main():
-    opts = Opts
-
-    illuminant = sds_from_file(opts.illuminant)
-    chart = sds_from_file(opts.chart).separate()
-    camera = sds_from_file(opts.camera)
+    opts = Config
 
     match opts.mode:
         case Mode.CHART:
-            dataset = dataset_from_chart(camera, chart, illuminant, opts)
+            dataset = dataset_from_chart(opts)
         case Mode.SKYPANEL:
-            dataset = dataset_from_skypanel_lattice(camera, opts)
+            dataset = dataset_from_skypanel_lattice(opts)
 
     if opts.plot:
-        plot_ssfs(camera)
+        # plot_ssfs(sds_from_file(opts.camera))
         plot_3d(dataset)
 
     if opts.output != "":

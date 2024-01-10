@@ -1,41 +1,15 @@
-import colour
-import matplotlib.pyplot as plt
-import numpy as np
-import os
-import scipy
-
-# --------- TEMP CONFIG -----------
-#
 # SSF criteria:
 #   - Quantum efficiency included
 #   - Testing illuminant excluded
 #
 # SDs suggestions:
 #   - Increment <= 10nm for best precision
-#
 
-TRANSFER_FUNCTION = colour.models.log_encoding_ARRILogC3
-
-CAMERA = "cameras/arri_alexa.txt"
-ILLUMINANT = "illuminants/incandescent_abs.txt"
-CHART = "charts/sg_spectral.txt"
-
-OUTPUT = "alexa_dataset_out.txt"
-
-# Will be enum later.
-#   0: Chart
-#   1: SkyPanel
-MODE = 0
-
-SWEEP_MIN = -5.0
-SWEEP_MAX = 5.0
-SWEEP_INCREMENT = 1
-
-SKYPANEL_LATTICE_SIZE = 5
-
-PLOT = True
-
-# --------------------------------
+import colour
+import matplotlib.pyplot as plt
+import numpy as np
+import os
+import scipy
 
 SPECTRUM_MIN = 380
 SPECTRUM_MAX = 780
@@ -126,7 +100,7 @@ def sds_from_file(filename, delim=None, comment='#'):
 
     return Sds(data[:, 0], data[:, 1:])
 
-def dataset_from_skypanel_lattice(camera: Sds):
+def dataset_from_skypanel_lattice(camera, opts):
     # Relative SPD of approximated SkyPanel. RGB lights only, not RGBW.
     # Really more like the transmission.
     # https://www.desmos.com/calculator/gvyahvtfam
@@ -143,7 +117,7 @@ def dataset_from_skypanel_lattice(camera: Sds):
     exp_wb_coeff = 0.18 / gray_patch
 
     grid = np.linspace(0.0, 1.0, SKYPANEL_LATTICE_SIZE)
-    sweeps = np.arange(SWEEP_MIN, SWEEP_MAX + SWEEP_INCREMENT, SWEEP_INCREMENT)
+    sweeps = np.arange(opts.sweep_min, opts.sweep_max + opts.sweep_increment, opts.sweep_increment)
     dataset = []
 
     for b in grid:
@@ -153,18 +127,18 @@ def dataset_from_skypanel_lattice(camera: Sds):
                 for wavelength in range(SPECTRUM_MIN, SPECTRUM_MAX + 1):
                     ts += camera.sample(wavelength) * arri_skypanel(wavelength, r, g, b)
                 for stop in sweeps:
-                    res = TRANSFER_FUNCTION(ts * exp_wb_coeff * np.power(2.0, stop))
+                    res = opts.transfer_function(ts * exp_wb_coeff * np.power(2.0, stop))
                     dataset.append(res)
 
     return np.array(dataset)
 
-def dataset_from_chart(camera, chart, illuminant):
+def dataset_from_chart(camera, chart, illuminant, opts):
     gray_patch = np.zeros((3))
     for wavelength in range(SPECTRUM_MIN, SPECTRUM_MAX + 1):
         gray_patch += camera.sample(wavelength) * 0.18 * illuminant.sample(wavelength)
     exp_wb_coeff = 0.18 / gray_patch
 
-    sweeps = np.arange(SWEEP_MIN, SWEEP_MAX + SWEEP_INCREMENT, SWEEP_INCREMENT)
+    sweeps = np.arange(opts.sweep_min, opts.sweep_max + opts.sweep_increment, opts.sweep_increment)
     dataset = []
 
     for patch in chart:
@@ -172,7 +146,7 @@ def dataset_from_chart(camera, chart, illuminant):
         for wavelength in range(SPECTRUM_MIN, SPECTRUM_MAX + 1):
             ts += camera.sample(wavelength) * patch.sample(wavelength) * illuminant.sample(wavelength)
         for stop in sweeps:
-            res = TRANSFER_FUNCTION(ts * exp_wb_coeff * np.power(2.0, stop))
+            res = opts.transfer_function(ts * exp_wb_coeff * np.power(2.0, stop))
             dataset.append(res)
 
     return np.array(dataset)
@@ -214,24 +188,43 @@ def plot_ssfs(camera):
     plt.plot(camera.wavelengths, camera.values[:, 2], c="b")
     plt.plot()
 
+class Mode:
+    CHART = 0
+    SKYPANEL = 1
+
+class Opts:
+    illuminant = "illuminants/incandescent_abs.txt"
+    chart = "charts/sg_spectral.txt"
+    camera = "cameras/arri_alexa.txt"
+    output = "alexa_dataset_out.txt"
+    mode = Mode.CHART
+    sweep_min = -5.0
+    sweep_max = 5.0
+    sweep_increment = 1
+    skypanel_lattice_size = 5
+    transfer_function = colour.models.log_encoding_ARRILogC3
+    plot = True
+
 def main():
-    illuminant = sds_from_file(ILLUMINANT)
-    chart = sds_from_file(CHART).separate()
-    camera = sds_from_file(CAMERA)
+    opts = Opts
 
-    match MODE:
-        case 0:
-            dataset = dataset_from_chart(camera, chart, illuminant)
-        case 1:
-            dataset = dataset_from_skypanel_lattice(camera)
+    illuminant = sds_from_file(opts.illuminant)
+    chart = sds_from_file(opts.chart).separate()
+    camera = sds_from_file(opts.camera)
 
-    if PLOT:
+    match opts.mode:
+        case Mode.CHART:
+            dataset = dataset_from_chart(camera, chart, illuminant, opts)
+        case Mode.SKYPANEL:
+            dataset = dataset_from_skypanel_lattice(camera, opts)
+
+    if opts.plot:
         plot_ssfs(camera)
         plot_3d(dataset)
 
-    if OUTPUT != "":
-        with open(OUTPUT, 'w') as output:
-            match OUTPUT.split('.')[-1]:
+    if opts.output != "":
+        with open(opts.output, 'w') as output:
+            match opts.output.split('.')[-1]:
                 case "csv":
                     delimiter = ','
                 case "tsv":

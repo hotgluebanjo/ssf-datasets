@@ -201,7 +201,7 @@ class Mode:
 class Config:
     illuminant = "illuminants/incandescent_abs.csv"
     chart = "charts/SG_140.csv"
-    camera = "cameras/ARRI_Alexa.csv"
+    camera = "cameras/brendel/ARRI_Alexa.csv"
     output = "alexa_dataset_out.csv"
     mode = Mode.CHART
     sweep_min = -5.0

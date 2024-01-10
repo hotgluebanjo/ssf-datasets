@@ -199,10 +199,10 @@ class Mode:
     SKYPANEL = 1
 
 class Config:
-    illuminant = "illuminants/incandescent_abs.txt"
-    chart = "charts/sg_spectral.txt"
+    illuminant = "illuminants/incandescent_abs.csv"
+    chart = "charts/SG_140.csv"
     camera = "cameras/arri_alexa.txt"
-    output = "alexa_dataset_out.txt"
+    output = "alexa_dataset_out.csv"
     mode = Mode.CHART
     sweep_min = -5.0
     sweep_max = 5.0

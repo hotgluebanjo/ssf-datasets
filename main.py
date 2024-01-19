@@ -192,11 +192,15 @@ def plot_ssfs(camera):
     plt.plot(camera.wavelengths, camera.values[:, 0], c="r")
     plt.plot(camera.wavelengths, camera.values[:, 1], c="g")
     plt.plot(camera.wavelengths, camera.values[:, 2], c="b")
-    plt.plot()
+    plt.show()
 
 class Mode:
-    CHART = 0
+    CHART    = 0
     SKYPANEL = 1
+
+class Flags:
+    PLOT_DATASET = 1 << 0
+    PLOT_SSFS    = 1 << 1
 
 class Config:
     illuminant = "illuminants/incandescent_abs.csv"
@@ -209,7 +213,7 @@ class Config:
     sweep_increment = 1
     skypanel_lattice_size = 5
     transfer_function = colour.models.log_encoding_ARRILogC3
-    plot = True
+    flags = Flags.PLOT_DATASET
 
 def main():
     opts = Config
@@ -220,8 +224,10 @@ def main():
         case Mode.SKYPANEL:
             dataset = dataset_from_skypanel_lattice(opts)
 
-    if opts.plot:
-        # plot_ssfs(sds_from_file(opts.camera))
+    if opts.flags & Flags.PLOT_SSFS != 0:
+        plot_ssfs(sds_from_file(opts.camera))
+
+    if opts.flags & Flags.PLOT_DATASET != 0:
         plot_3d(dataset)
 
     if opts.output != "":
